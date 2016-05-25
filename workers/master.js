@@ -1,5 +1,4 @@
 module.exports = function() {
-
   var cpuCount = api.os.cpus().length;
 
   var workers = [];
@@ -8,12 +7,24 @@ module.exports = function() {
     workers.push(worker);
   }
 
-  var task = [2, 17, 3, 2, 5, 7, 15, 22, 1, 14, 15, 9, 0, 11];
-  var results = [];
+  var data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-  workers.forEach(function(worker) {
+  var workersCount = api.os.cpus().length;
+  var last_worker_id = 0;
+  var finished_workers = 0;
+  var worker_results = {};
+  var workerSockets = [];
 
-    worker.send({ task: task });
+  var chunk_size = data.length / workersCount;
+
+  for (var i = 0; i < cpuCount; ++i) {
+    startWorker(workers[i], i + 1);
+  }
+
+  function startWorker(worker, workerID) {
+    worker.send({
+      task: data.slice((workerID - 1) * chunk_size, Math.max(workerID * chunk_size))
+    });
 
     worker.on('exit', function (code) {
       console.log('exit ' + worker.process.pid + ' ' + code);
@@ -24,14 +35,22 @@ module.exports = function() {
         'message from worker ' + worker.process.pid + ': ' +
         JSON.stringify(message)
       );
-      results.push(message.result);
 
-      if (results.length === cpuCount) {
+      worker_results[workerID] = message.result;
+
+      if (worker_results.length === cpuCount) {
         process.exit(1);
       }
 
-    });
+      ++finished_workers;
 
-  });
+      console.log(finished_workers);
+
+      if (finished_workers == workersCount) {
+        console.log(worker_results);
+        process.exit(1);
+      }
+    });
+  }
 
 };
